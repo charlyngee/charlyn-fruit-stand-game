@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fruit Stand Game</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background-color: #f0f8ff;
+            font-family: Arial, sans-serif;
+        }
+        canvas {
+            border: 2px solid #333;
+            background-color: white;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="gameCanvas" width="800" height="600"></canvas>
+    <script>
+        // Your game JavaScript will go here
+        console.log("Game starting...");
+
+        const canvas = document.getElementById("gameCanvas");
+        const ctx = canvas.getContext("2d");
+   
+    // Game state object goes here
+    const game = {
+    // ... the game object code
+        player: {
+            x: 0,      // Grid position (not pixel position)
+            y: 0
+        },
+
+            
+        grid: {
+            width: 8,   // 8x6 grid of fruits
+            height: 6,
+            fruits: []  // We'll fill this with fruit data
+        },
+
+        basket: {
+        fruits: [],        // What player has collected
+        maxCapacity: 10    // Basket gets full at 10 fruits
+        },
+
+        orders: [
+            { apple: 2, grapes: 1, banana: 1, completed: false }
+        ]
+    };
+    console.log("Game state created:", game);
+    
+    const fruitTypes = {
+        apple: { name: 'apple', color: 'red' },
+        grapes: { name: 'grapes', color: 'purple' },
+        banana: { name: 'banana', color: 'yellow' }
+    };
+
+    // Function to randomly generate fruits for the grid
+    function generateFruitGrid() {
+        const fruits = Object.keys(fruitTypes); // ['apple', 'grapes', 'banana']
+        game.grid.fruits = [];
+        
+        for (let y = 0; y < game.grid.height; y++) {
+            game.grid.fruits[y] = []; // Create a row
+            for (let x = 0; x < game.grid.width; x++) {
+                // Pick a random fruit type
+                const randomFruit = fruits[Math.floor(Math.random() * fruits.length)];
+                game.grid.fruits[y][x] = randomFruit;
+            }
+        }
+    }    
+
+    function drawGrid() {
+        const cellSize = 60; // Size of each grid cell in pixels
+
+        for (let y = 0; y < game.grid.height; y++) {
+            for (let x = 0; x < game.grid.width; x++) {
+                const fruitType = game.grid.fruits[y][x];
+
+                const pixelX = x * cellSize;
+                const pixelY = y * cellSize;
+
+                if (fruitType === null) {
+                    // Draw empty cell
+                    ctx.fillStyle = 'lightgray';
+                    ctx.fillRect(pixelX, pixelY, cellSize, cellSize);
+                } else {
+                    // Draw fruit
+                    const fruit = fruitTypes[fruitType];
+                    ctx.fillStyle = fruit.color;
+                    ctx.fillRect(pixelX, pixelY, cellSize, cellSize);
+                }
+                ctx.strokeStyle = 'black';
+                ctx.lineWidth = 1;
+                ctx.strokeRect(pixelX, pixelY, cellSize, cellSize);
+            }
+        }
+    }
+    
+
+
+    // Function to draw the player
+    function drawPlayer() {
+        const cellSize = 60;
+        const pixelX = game.player.x * cellSize;
+        const pixelY = game.player.y * cellSize;
+        
+        // Draw player as a blue circle in the center of the cell
+        ctx.beginPath();
+        ctx.arc(pixelX + cellSize/2, pixelY + cellSize/2, 20, 0, Math.PI * 2);
+        ctx.fillStyle = 'blue';
+        ctx.fill();
+        ctx.strokeStyle = 'white';
+        ctx.lineWidth = 3;
+        ctx.stroke();
+    }
+
+    document.addEventListener('keydown', function(event) {
+        let moved = false;
+        if (event.key === 'ArrowUp' && game.player.y > 0) {
+            game.player.y--;
+            moved = true;
+        } else if (event.key === 'ArrowDown' && game.player.y < game.grid.height - 1) {
+            game.player.y++;
+            moved = true;
+        } else if (event.key === 'ArrowLeft' && game.player.x > 0) {
+            game.player.x--;
+            moved = true;
+        } else if (event.key === 'ArrowRight' && game.player.x < game.grid.width - 1) {
+            game.player.x++;
+            moved = true;
+        }
+
+        if (moved) {
+            console.log("Player moved to:", game.player.x, game.player.y);
+
+            collectFruit();
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            drawGrid();
+            drawPlayer();
+        }
+
+        // use a complete order keystroke for now
+        if (event.key === ' ') {
+            tryCompleteOrders();
+        }
+    });
+
+    function collectFruit() {
+        const playerX = game.player.x;
+        const playerY = game.player.y;
+
+        // Check if there's a fruit at this position
+        const fruitAtPosition = game.grid.fruits[playerY][playerX];
+
+        if (fruitAtPosition !== null) {
+            if (game.basket.fruits.length < game.basket.maxCapacity) {
+                game.basket.fruits.push(fruitAtPosition); // add fruit to basket array
+                game.grid.fruits[playerY][playerX] = null; // remove fruit from grid
+                console.log("Collected fruit:", fruitAtPosition, "Basket:", game.basket.fruits.length +"/"+game.basket.maxCapacity);
+                console.log("Basket now contains:", game.basket.fruits);
+            } else {
+                console.log("Basket is full! Cannot collect", fruitAtPosition);
+            }
+        }
+    }
+
+    function countBasketFruits() {
+        const counts = { apple: 0, grapes: 0, banana: 0 };
+        for (let fruit of game.basket.fruits) {
+            counts[fruit]++;
+        }
+        return counts;
+    }
+
+    function canCompleteOrder(order, basketCounts) {
+        return (basketCounts.apple >= (order.apple || 0)) &&
+               (basketCounts.grapes >= (order.grapes || 0)) &&
+               (basketCounts.banana >= (order.banana || 0));
+    }
+
+    function tryCompleteOrders() {
+        const basketCounts = countBasketFruits();
+        console.log("Basket counts:", basketCounts);
+
+        for (let i = 0; i < game.orders.length; i++) {
+            const order = game.orders[i];
+            if (!order.completed && canCompleteOrder(order, basketCounts)) {
+                // complete the order
+                completeOrder(order);
+                console.log("Completed order:", order);
+                console.log("Game state now:", game);
+                return;
+            }
+        }
+
+        console.log("No orders completed right now.");
+    }
+
+    function completeOrder(order) {
+        const fruitsToRemove = [];
+        for (let i = 0; i < (order.apple || 0); i++) {
+            fruitsToRemove.push('apple');
+        }
+        for (let i = 0; i < (order.grapes || 0); i++) {
+            fruitsToRemove.push('grapes');
+        }
+        for (let i = 0; i < (order.banana || 0); i++) {
+            fruitsToRemove.push('banana');
+        }
+
+        console.log("Fruits to remove:", fruitsToRemove);
+
+        // remove from basket
+        for (let fruitToRemove of fruitsToRemove) {
+            const index = game.basket.fruits.indexOf(fruitToRemove);
+            if (index !== -1) {
+                game.basket.fruits.splice(index, 1);
+                console.log("Basket now contains:", game.basket.fruits);
+            }
+        }
+
+        // mark as completed
+        order.completed = true;
+    }
+
+
+
+    generateFruitGrid();
+    console.log("Fruit grid generated:", game.grid.fruits);
+    drawGrid();
+    drawPlayer();
+
+
+    </script>
+</body>
+</html>
