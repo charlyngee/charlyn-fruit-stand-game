@@ -50,9 +50,7 @@
         maxCapacity: 10    // Basket gets full at 10 fruits
         },
 
-        orders: [
-            { apple: 2, grapes: 1, banana: 1, completed: false }
-        ]
+        orders: []
     };
     console.log("Game state created:", game);
     
@@ -197,6 +195,9 @@
                 // complete the order
                 completeOrder(order);
                 console.log("Completed order:", order);
+
+                addNewOrder();
+
                 console.log("Game state now:", game);
                 return;
             }
@@ -232,10 +233,38 @@
         order.completed = true;
     }
 
+    function generateRandomOrder() {
+        const order = { completed: false };
+        const fruitNames = Object.keys(fruitTypes);
+
+        // randomly choose how many fruit types to include
+        const numFruitTypes = Math.floor(Math.random() * fruitNames.length) + 1;
+
+        const shuffledFruits = [...fruitNames].sort(() => Math.random() - 0.5);
+        const selectedFruits = shuffledFruits.slice(0, numFruitTypes);
+        // randomly select how many of each fruit type to include 
+        for (let fruit of selectedFruits) {
+            order[fruit] = Math.floor(Math.random() * 3) + 1;
+        }
+        return order;
+    }
+
+    function addNewOrder() {
+        const newOrder = generateRandomOrder();
+        game.orders.push(newOrder);
+        console.log("New order added:", newOrder);
+    }
+
+
+
+
+
 
 
     generateFruitGrid();
     console.log("Fruit grid generated:", game.grid.fruits);
+    addNewOrder();
+    console.log("Game state now:", game);
     drawGrid();
     drawPlayer();
 
