@@ -50,7 +50,11 @@
         maxCapacity: 10    // Basket gets full at 10 fruits
         },
 
-        orders: []
+        orders: [],
+
+        completedOrdersCount: 0,
+        gameState: 'playing',
+        targetOrdersCount: 3 // How many orders to complete to win
     };
     console.log("Game state created:", game);
     
@@ -121,6 +125,14 @@
     }
 
     document.addEventListener('keydown', function(event) {
+        if (event.key === 'r' || event.key === 'R') {
+            restartGame();
+        }
+
+        if (game.gameState !== 'playing') {
+            return;
+        }
+
         let moved = false;
         if (event.key === 'ArrowUp' && game.player.y > 0) {
             game.player.y--;
@@ -152,6 +164,25 @@
         }
     });
 
+    function restartGame() {
+        game.gameState = 'playing';
+        game.completedOrdersCount = 0;
+        game.orders = [];
+        game.basket.fruits = [];
+        game.player.x = 0;
+        game.player.y = 0;
+
+        generateFruitGrid();
+        addNewOrder();
+
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        drawGrid();
+        drawPlayer();
+
+        console.log("Game restarted. Game state now:", game);
+    }
+
+
     function collectFruit() {
         const playerX = game.player.x;
         const playerY = game.player.y;
@@ -169,6 +200,8 @@
                 console.log("Basket is full! Cannot collect", fruitAtPosition);
             }
         }
+
+        checkGameEnd();
     }
 
     function countBasketFruits() {
@@ -199,11 +232,14 @@
                 addNewOrder();
 
                 console.log("Game state now:", game);
+                checkGameEnd();
                 return;
             }
         }
 
         console.log("No orders completed right now.");
+
+        checkGameEnd();
     }
 
     function completeOrder(order) {
@@ -231,6 +267,9 @@
 
         // mark as completed
         order.completed = true;
+
+        game.completedOrdersCount++;
+        console.log("Completed orders count:", game.completedOrdersCount);
     }
 
     function generateRandomOrder() {
@@ -255,6 +294,31 @@
         console.log("New order added:", newOrder);
     }
 
+    function checkGameEnd() {
+        if (game.completedOrdersCount >= game.targetOrdersCount) {
+            game.gameState = 'won';
+            console.log("You won the game!");
+            return;
+        }
+
+        if (game.basket.fruits.length >= game.basket.maxCapacity) {
+            const basketCounts = countBasketFruits();
+            let canCompleteAny = false;
+            for (let order of game.orders) {
+                if (!order.completed && canCompleteOrder(order, basketCounts)) {
+                    canCompleteAny = true;
+                    break;
+                }
+            }
+
+            if (!canCompleteAny) {
+                game.gameState = 'lost';
+                console.log("You lost the game!");
+                return;
+            }
+        }
+
+    }
 
 
 
