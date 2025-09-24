@@ -123,6 +123,92 @@
         ctx.lineWidth = 3;
         ctx.stroke();
     }
+    
+    // draw a text box
+    function drawTextBox(text, x, y, width, height, bgcolor = 'gray') {
+        ctx.fillStyle = bgcolor;
+        ctx.fillRect(x, y, width, height);
+
+        // Draw border
+        ctx.strokeStyle = 'black';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(x, y, width, height);
+        
+        // Draw text
+        ctx.fillStyle = 'black';
+        ctx.font = '16px Arial';
+        ctx.fillText(text, x + 10, y + 25);
+    }
+
+    function drawOrders() {
+        const startX = 500;  // Right side of grid
+        const startY = 20;
+        let currentY = startY;
+        
+            // Title
+        drawTextBox('CURRENT ORDERS:', startX, currentY, 280, 40, '#e6f3ff');
+        currentY += 50;
+
+        // Draw each active order
+        for (let i = 0; i < game.orders.length; i++) {
+            const order = game.orders[i];
+            if (!order.completed) {
+                let orderText = `Order ${i + 1}: `;
+
+                const fruitNames = Object.keys(fruitTypes);
+                const requiredFruits = []
+                for (let fruit of fruitNames) {
+                    if (order[fruit] > 0) {
+                        requiredFruits.push(`${order[fruit]} ${fruit}`);
+                    }
+                }
+                orderText += requiredFruits.join(', ');
+                drawTextBox(orderText, startX, currentY, 280, 40, '#fff8dc');
+                currentY += 40;
+            }
+        }
+    }
+
+    // Function to draw basket contents
+    function drawBasket() {
+        const startX = 500;
+        const startY = 250;
+        
+        // Title with capacity
+        const basketTitle = `BASKET (${game.basket.fruits.length}/${game.basket.maxCapacity}):`;
+        drawTextBox(basketTitle, startX, startY, 280, 40, '#f0fff0');
+        
+        // Count each fruit type in basket
+        const basketCounts = countBasketFruits();
+        let currentY = startY + 50;
+        
+        const fruitNames = Object.keys(fruitTypes);
+        for (let fruit of fruitNames) {
+            if (basketCounts[fruit] > 0) {
+                const fruitText = `${basketCounts[fruit]} ${fruit}`;
+                drawTextBox(fruitText, startX, currentY, 280, 30, '#f5f5f5');
+                currentY += 35;
+            }
+        }
+        
+        // Show game progress
+        currentY += 10;
+        const progressText = `Orders completed: ${game.completedOrdersCount}/${game.targetOrdersCount}`;
+        drawTextBox(progressText, startX, currentY, 280, 30, '#ffe6e6');
+    }
+
+    function drawGameEndMessage() {
+        const startX = 50;
+        const startY = 400;
+
+        if (game.gameState === 'won') {
+            endMessage = 'YOU WON!';
+        } else {
+            endMessage = 'YOU LOST!';
+        }
+        drawTextBox(endMessage, startX, startY, 280, 40, 'pink');
+    }
+
 
     document.addEventListener('keydown', function(event) {
         if (event.key === 'r' || event.key === 'R') {
@@ -152,15 +238,21 @@
             console.log("Player moved to:", game.player.x, game.player.y);
 
             collectFruit();
-
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            drawGrid();
-            drawPlayer();
         }
 
         // use a complete order keystroke for now
         if (event.key === ' ') {
             tryCompleteOrders();
+        }
+
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        drawGrid();
+        drawPlayer();
+        drawOrders();
+        drawBasket();
+
+        if (game.gameState !== 'playing') {
+            drawGameEndMessage();
         }
     });
 
@@ -178,7 +270,8 @@
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         drawGrid();
         drawPlayer();
-
+        drawOrders();
+        drawBasket();
         console.log("Game restarted. Game state now:", game);
     }
 
@@ -331,6 +424,8 @@
     console.log("Game state now:", game);
     drawGrid();
     drawPlayer();
+    drawOrders();
+    drawBasket();
 
 
     </script>
