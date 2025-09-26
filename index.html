@@ -51,6 +51,7 @@
         },
 
         orders: [],
+        maxActiveOrders: 3,
 
         completedOrdersCount: 0,
         gameState: 'playing',
@@ -60,13 +61,14 @@
     
     const fruitTypes = {
         apple: { name: 'apple', color: 'red' },
-        grapes: { name: 'grapes', color: 'purple' },
-        banana: { name: 'banana', color: 'yellow' }
+        //grapes: { name: 'grapes', color: 'purple' },
+        banana: { name: 'banana', color: 'yellow' },
+        orange: { name: 'orange', color: 'orange' }
     };
 
     // Function to randomly generate fruits for the grid
     function generateFruitGrid() {
-        const fruits = Object.keys(fruitTypes); // ['apple', 'grapes', 'banana']
+        const fruits = Object.keys(fruitTypes); 
         game.grid.fruits = [];
         
         for (let y = 0; y < game.grid.height; y++) {
@@ -149,6 +151,10 @@
         drawTextBox('CURRENT ORDERS:', startX, currentY, 280, 40, '#e6f3ff');
         currentY += 50;
 
+        // get current basket counts for progress tracking
+        const basketCounts = countBasketFruits();
+        let basketCountsSimulation = { ...basketCounts };
+
         // Draw each active order
         for (let i = 0; i < game.orders.length; i++) {
             const order = game.orders[i];
@@ -159,11 +165,27 @@
                 const requiredFruits = []
                 for (let fruit of fruitNames) {
                     if (order[fruit] > 0) {
-                        requiredFruits.push(`${order[fruit]} ${fruit}`);
+                        const needed = order[fruit];
+                        const have = basketCountsSimulation[fruit] || 0; // count of this fruit in basket sim
+                        requiredFruits.push(`${needed} ${fruit} (${have}/${needed})`);
                     }
                 }
                 orderText += requiredFruits.join(', ');
-                drawTextBox(orderText, startX, currentY, 280, 40, '#fff8dc');
+
+                // if THIS order is completable, simulate completing it and update basketCountsSimulation
+                const canComplete = canCompleteOrder(order, basketCountsSimulation);
+
+                if (canComplete) {
+                    for (let fruit of fruitNames) {
+                        if (order[fruit]) {
+                            basketCountsSimulation[fruit] -= order[fruit];
+                        }
+                    }
+                }
+
+                const bgColor = canComplete ? '#d4ffe6' : '#fff8dc'; // Green tint if completable
+
+                drawTextBox(orderText, startX, currentY, 280, 40, bgColor);
                 currentY += 40;
             }
         }
@@ -265,7 +287,9 @@
         game.player.y = 0;
 
         generateFruitGrid();
-        addNewOrder();
+        for (let i = 0; i < game.maxActiveOrders; i++) {
+            addNewOrder();
+        }
 
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         drawGrid();
@@ -298,7 +322,14 @@
     }
 
     function countBasketFruits() {
-        const counts = { apple: 0, grapes: 0, banana: 0 };
+        const counts = {};
+
+        // initialize counts for all fruit types
+        for (let fruit of Object.keys(fruitTypes)) {
+            counts[fruit] = 0;
+        }
+
+        // count each fruit type in basket
         for (let fruit of game.basket.fruits) {
             counts[fruit]++;
         }
@@ -306,47 +337,60 @@
     }
 
     function canCompleteOrder(order, basketCounts) {
-        return (basketCounts.apple >= (order.apple || 0)) &&
-               (basketCounts.grapes >= (order.grapes || 0)) &&
-               (basketCounts.banana >= (order.banana || 0));
+        // check if the basket has enough of each fruit type to complete the order
+        const fruitNames = Object.keys(fruitTypes);
+        for (let fruit of fruitNames) {
+            const needed = order[fruit] || 0; 
+            const has = basketCounts[fruit] || 0;
+            if (has < needed) {
+                return false;
+            }
+        }
+        return true;
     }
 
     function tryCompleteOrders() {
-        const basketCounts = countBasketFruits();
-        console.log("Basket counts:", basketCounts);
+        let completedCount = 0;
 
-        for (let i = 0; i < game.orders.length; i++) {
-            const order = game.orders[i];
+        // try to complete as many orders as possible
+        for (let order of game.orders) {
+            const basketCounts = countBasketFruits(); // fresh counts for each attempt. the completeOrder function will modify the basket.
+            console.log("Basket counts:", basketCounts);
+            
             if (!order.completed && canCompleteOrder(order, basketCounts)) {
                 // complete the order
                 completeOrder(order);
                 console.log("Completed order:", order);
+                completedCount++;
 
+                // add a new order TODO should I always maintain maxActiveOrders number of orders?
                 addNewOrder();
 
                 console.log("Game state now:", game);
                 checkGameEnd();
-                return;
             }
         }
 
-        console.log("No orders completed right now.");
+        if (completedCount > 0) {
+            console.log("Completed orders:", completedCount);
+        } else {
+            console.log("No orders completed right now.");
+        }
 
         checkGameEnd();
     }
 
     function completeOrder(order) {
         const fruitsToRemove = [];
-        for (let i = 0; i < (order.apple || 0); i++) {
-            fruitsToRemove.push('apple');
-        }
-        for (let i = 0; i < (order.grapes || 0); i++) {
-            fruitsToRemove.push('grapes');
-        }
-        for (let i = 0; i < (order.banana || 0); i++) {
-            fruitsToRemove.push('banana');
-        }
 
+        // make a list of fruits to remove. remove the ones needed to complete the order.
+        const fruitNames = Object.keys(fruitTypes);
+        for (let fruit of fruitNames) {
+            const needed = order[fruit] || 0;
+            for (let i = 0; i < needed; i++) {
+                fruitsToRemove.push(fruit);
+            }
+        }
         console.log("Fruits to remove:", fruitsToRemove);
 
         // remove from basket
@@ -420,8 +464,13 @@
 
     generateFruitGrid();
     console.log("Fruit grid generated:", game.grid.fruits);
-    addNewOrder();
+    for (let i = 0; i < game.maxActiveOrders; i++) {
+        addNewOrder();
+    }
     console.log("Game state now:", game);
+
+
+
     drawGrid();
     drawPlayer();
     drawOrders();
