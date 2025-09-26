@@ -153,7 +153,10 @@
 
         // get current basket counts for progress tracking
         const basketCounts = countBasketFruits();
-        let basketCountsSimulation = { ...basketCounts };
+        const completeableOrders = getCompleteableOrders();
+
+        // Create a set of completable order indices for easy lookup
+        const completableOrderIndices = new Set(completeableOrders.map(co => co.index));
 
         // Draw each active order
         for (let i = 0; i < game.orders.length; i++) {
@@ -166,24 +169,15 @@
                 for (let fruit of fruitNames) {
                     if (order[fruit] > 0) {
                         const needed = order[fruit];
-                        const have = basketCountsSimulation[fruit] || 0; // count of this fruit in basket sim
+                        const have = basketCounts[fruit] || 0; // count of this fruit in real basket
                         requiredFruits.push(`${needed} ${fruit} (${have}/${needed})`);
                     }
                 }
                 orderText += requiredFruits.join(', ');
 
-                // if THIS order is completable, simulate completing it and update basketCountsSimulation
-                const canComplete = canCompleteOrder(order, basketCountsSimulation);
-
-                if (canComplete) {
-                    for (let fruit of fruitNames) {
-                        if (order[fruit]) {
-                            basketCountsSimulation[fruit] -= order[fruit];
-                        }
-                    }
-                }
-
-                const bgColor = canComplete ? '#d4ffe6' : '#fff8dc'; // Green tint if completable
+                // if this order will be completed on submission, color code it green
+                const willComplete = completableOrderIndices.has(i);
+                const bgColor = willComplete ? '#d4ffe6' : '#fff8dc';
 
                 drawTextBox(orderText, startX, currentY, 280, 40, bgColor);
                 currentY += 40;
@@ -349,26 +343,74 @@
         return true;
     }
 
+    function getOrderDifficultyScore(order) {
+        let score = 0;
+        const fruitNames = Object.keys(fruitTypes);
+        for (let fruit of fruitNames) {
+            if (order[fruit]) {
+                score += order[fruit];
+            }
+        }
+        return score; // higher number of fruits is more difficult
+    }
+
+    function getCompleteableOrders() {
+        const basketCounts = countBasketFruits(); 
+        const completeableOrders = [];
+        const candidates = [];
+        for (let i = 0; i < game.orders.length; i++) {
+            const order = game.orders[i];
+            if (!order.completed) {
+                const basketCounts = countBasketFruits();
+                if (canCompleteOrder(order, basketCounts)) {
+                    candidates.push({
+                        order: order,
+                        index: i,
+                        score: getOrderDifficultyScore(order)
+                    });
+                }
+            }
+        }
+        candidates.sort((a, b) => b.score - a.score);
+
+        let simulatedBasketCounts = { ...basketCounts };
+        for (let candidate of candidates) {
+            if (canCompleteOrder(candidate.order, simulatedBasketCounts)) {
+                completeableOrders.push(candidate);
+
+                // 'consume' the fruits from the simulation basket
+                const fruitNames = Object.keys(fruitTypes);
+                for (let fruit of fruitNames) {
+                    if (candidate.order[fruit]) {
+                        simulatedBasketCounts[fruit] -= candidate.order[fruit];
+                    }
+                }
+            }
+        }
+
+        return completeableOrders;
+    }
+
     function tryCompleteOrders() {
         let completedCount = 0;
 
+        // get all orders that will complete, according to the priority order and the current basket contents
+        const completeableOrders = getCompleteableOrders();        
+
         // try to complete as many orders as possible
-        for (let order of game.orders) {
+        for (let orderData of completeableOrders) {
             const basketCounts = countBasketFruits(); // fresh counts for each attempt. the completeOrder function will modify the basket.
-            console.log("Basket counts:", basketCounts);
             
-            if (!order.completed && canCompleteOrder(order, basketCounts)) {
-                // complete the order
-                completeOrder(order);
-                console.log("Completed order:", order);
-                completedCount++;
+            // complete the order
+            completeOrder(orderData.order);
+            console.log("Completed order #", orderData.index, " ", orderData.order, " with Score:", orderData.score);
+            completedCount++;
 
-                // add a new order TODO should I always maintain maxActiveOrders number of orders?
-                addNewOrder();
+            // add a new order to replace each completed order
+            addNewOrder();
 
-                console.log("Game state now:", game);
-                checkGameEnd();
-            }
+            console.log("Game state now:", game);
+            checkGameEnd();
         }
 
         if (completedCount > 0) {
