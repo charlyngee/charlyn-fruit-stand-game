@@ -121,6 +121,13 @@
             }
         }
 
+        ctx.fillStyle = 'black';    
+        ctx.font = '12px Arial';
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('🎯 Arrow keys: move • Spacebar: submit orders • R: restart', 
+            50, 380);
+
         // restore previous settings (e.g. text alignment) after drawing the grid
        ctx.restore();
     }
