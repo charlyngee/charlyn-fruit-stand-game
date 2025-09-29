@@ -60,10 +60,10 @@
     console.log("Game state created:", game);
     
     const fruitTypes = {
-        apple: { name: 'apple', color: 'red' },
+        apple: { name: 'apple', color: 'red', emoji: '🍎'  },
         //grapes: { name: 'grapes', color: 'purple' },
-        banana: { name: 'banana', color: 'yellow' },
-        orange: { name: 'orange', color: 'orange' }
+        banana: { name: 'banana', color: 'yellow' , emoji: '🍌' },
+        orange: { name: 'orange', color: 'orange' , emoji: '🍊' },
     };
 
     // Function to randomly generate fruits for the grid
@@ -82,6 +82,8 @@
     }    
 
     function drawGrid() {
+        ctx.save();
+
         const cellSize = 60; // Size of each grid cell in pixels
 
         for (let y = 0; y < game.grid.height; y++) {
@@ -98,14 +100,30 @@
                 } else {
                     // Draw fruit
                     const fruit = fruitTypes[fruitType];
+                    //ctx.fillStyle = '#f8f8f8';  // Light background
                     ctx.fillStyle = fruit.color;
                     ctx.fillRect(pixelX, pixelY, cellSize, cellSize);
+
+                    // Draw emoji sprite
+                    ctx.font = '30px Arial';  // Large emoji
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.fillStyle = 'black';
+                    ctx.fillText(
+                        fruit.emoji, 
+                        pixelX + cellSize/2, 
+                        pixelY + cellSize/2
+                    );
                 }
+                // draw border
                 ctx.strokeStyle = 'black';
                 ctx.lineWidth = 1;
                 ctx.strokeRect(pixelX, pixelY, cellSize, cellSize);
             }
         }
+
+        // restore previous settings (e.g. text alignment) after drawing the grid
+       ctx.restore();
     }
     
 
