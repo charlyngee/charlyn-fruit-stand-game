@@ -242,6 +242,7 @@
         drawTextBox(basketTitle, startX, startY, 280, 40, '#f0fff0');
         
         // Draw basket grid
+        const gridStartX = startX + 20;
         const gridStartY = startY + 50;
         const slotSize = 35;  // Each slot is 25x25 pixels
         const slotsPerRow = 5;  // 5 slots per row = 2 rows total
@@ -251,7 +252,7 @@
             const row = Math.floor(slot / slotsPerRow);
             const col = slot % slotsPerRow;
             
-            const slotX = startX + 20 + (col * slotSpacing);
+            const slotX = gridStartX + (col * slotSpacing);
             const slotY = gridStartY + (row * slotSpacing);
 
             if (slot < game.basket.fruits.length) {
@@ -285,6 +286,17 @@
             ctx.lineWidth = 1;
             ctx.strokeRect(slotX, slotY, slotSize, slotSize);
         }
+
+        // Prompt when basket is full but the game isn't over -- means you can submit orders to clear the basket
+        if (game.gameState === 'playing' && game.basket.fruits.length >= game.basket.maxCapacity) {
+            const promptY = 450;
+            const promptText = 'Full! Submit orders [space] to make room.';
+            // Draw text
+            ctx.fillStyle = 'black';
+            ctx.font = '12px Arial';
+            ctx.fillText(promptText, gridStartX, promptY);
+        }
+
         
         // Show game progress
         const progressY = 500;
@@ -314,6 +326,9 @@
             return;
         }
 
+        const originalPlayerX = game.player.x;
+        const originalPlayerY = game.player.y;
+
         let moved = false;
         if (event.key === 'ArrowUp' && game.player.y > 0) {
             game.player.y--;
@@ -330,9 +345,17 @@
         }
 
         if (moved) {
-            console.log("Player moved to:", game.player.x, game.player.y);
+            console.log("Player trying to move to:", game.player.x, game.player.y);
 
-            collectFruit();
+            const fruitAtNewPosition = game.grid.fruits[game.player.y][game.player.x];
+            if (fruitAtNewPosition !== null && game.basket.fruits.length >= game.basket.maxCapacity) {
+                console.log("Not allowed to move to a fruit position when basket is full.");
+                game.player.x = originalPlayerX;
+                game.player.y = originalPlayerY;
+            } else {
+                console.log("Player moved to:", game.player.x, game.player.y);
+                collectFruit();
+            }
         }
 
         // use a complete order keystroke for now
@@ -387,7 +410,7 @@
                 console.log("Collected fruit:", fruitAtPosition, "Basket:", game.basket.fruits.length +"/"+game.basket.maxCapacity);
                 console.log("Basket now contains:", game.basket.fruits);
             } else {
-                console.log("Basket is full! Cannot collect", fruitAtPosition);
+                console.log("Basket is full! Cannot collect", fruitAtPosition); // TODO redundant fruit & basket capacity check here now that I put it in the event handler too
             }
         }
 
