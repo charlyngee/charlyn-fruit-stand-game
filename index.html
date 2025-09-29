@@ -180,25 +180,55 @@
         for (let i = 0; i < game.orders.length; i++) {
             const order = game.orders[i];
             if (!order.completed) {
-                let orderText = `Order ${i + 1}: `;
-
-                const fruitNames = Object.keys(fruitTypes);
-                const requiredFruits = []
-                for (let fruit of fruitNames) {
-                    if (order[fruit] > 0) {
-                        const needed = order[fruit];
-                        const have = basketCounts[fruit] || 0; // count of this fruit in real basket
-                        requiredFruits.push(`${needed} ${fruit} (${have}/${needed})`);
-                    }
-                }
-                orderText += requiredFruits.join(', ');
-
                 // if this order will be completed on submission, color code it green
                 const willComplete = completableOrderIndices.has(i);
                 const bgColor = willComplete ? '#d4ffe6' : '#fff8dc';
 
-                drawTextBox(orderText, startX, currentY, 280, 40, bgColor);
-                currentY += 40;
+                // draw background box to fit fruit sprite + has/needed underneath
+                const boxHeight = 60
+                drawTextBox('', startX, currentY, 280, boxHeight, bgColor);
+
+                // Draw order title
+                ctx.fillStyle = 'black';
+                ctx.font = '16px Arial';
+                ctx.fillText(`Order ${i + 1}:`, startX + 10, currentY + 20);
+
+                // Draw fruits with emojis and counts
+                const fruitNames = Object.keys(fruitTypes);
+                const orderFruits = fruitNames.filter(fruit => order[fruit] > 0);
+
+                const fruitSpacing = 60; // space between each fruit (in pixels)
+                let fruitStartX = startX + 90; // start after the order title 
+
+                for (let fruit of orderFruits) {
+                    const needed = order[fruit];
+                    const have = basketCounts[fruit] || 0; // count of this fruit in real basket
+
+                    // Draw emoji centered
+                    ctx.save();
+                    ctx.font = '24px Arial';
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.fillText(
+                        fruitTypes[fruit].emoji, 
+                        fruitStartX + 25, // Center of fruit area
+                        currentY + 25     // Upper part of box
+                    );
+
+                     // Draw count text centered underneath
+                    ctx.font = '12px Arial';
+                    ctx.fillStyle = 'black';
+                    ctx.fillText(
+                        `(${have}/${needed})`, 
+                        fruitStartX + 25, // Center of fruit area
+                        currentY + 45     // Lower part of box
+                    );
+                    ctx.restore();
+
+                    fruitStartX += fruitSpacing; // Move to next fruit position
+                }
+
+                currentY += boxHeight + 5;
             }
         }
     }
@@ -206,7 +236,7 @@
     // Function to draw basket contents
     function drawBasket() {
         const startX = 500;
-        const startY = 250;
+        const startY = 300;
         
         // Title with capacity
         const basketTitle = `BASKET (${game.basket.fruits.length}/${game.basket.maxCapacity}):`;
