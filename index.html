@@ -362,30 +362,22 @@ xxx  xxx
         drawTextBox(endMessage, startX, startY, 280, 40, 'pink');
     }
 
-
-    document.addEventListener('keydown', function(event) {
-        if (event.key === 'r' || event.key === 'R') {
-            restartGame();
-        }
-
-        if (game.gameState !== 'playing') {
-            return;
-        }
-
+    // extract move logic into a function
+    function executeMove(direction) {
         const originalPlayerX = game.player.x;
         const originalPlayerY = game.player.y;
 
         let moved = false;
-        if (event.key === 'ArrowUp' && game.player.y > 0) {
+        if (direction === 'ArrowUp' && game.player.y > 0) {
             game.player.y--;
             moved = true;
-        } else if (event.key === 'ArrowDown' && game.player.y < game.grid.height - 1) {
+        } else if (direction === 'ArrowDown' && game.player.y < game.grid.height - 1) {
             game.player.y++;
             moved = true;
-        } else if (event.key === 'ArrowLeft' && game.player.x > 0) {
+        } else if (direction === 'ArrowLeft' && game.player.x > 0) {
             game.player.x--;
             moved = true;
-        } else if (event.key === 'ArrowRight' && game.player.x < game.grid.width - 1) {
+        } else if (direction === 'ArrowRight' && game.player.x < game.grid.width - 1) {
             game.player.x++;
             moved = true;
         }
@@ -398,19 +390,47 @@ xxx  xxx
                 console.log("Not allowed to move to a wall position.");
                 game.player.x = originalPlayerX;
                 game.player.y = originalPlayerY;
+                moved = false;
             } else if (fruitAtNewPosition !== null && game.basket.fruits.length >= game.basket.maxCapacity) {
                 console.log("Not allowed to move to a fruit position when basket is full.");
                 game.player.x = originalPlayerX;
                 game.player.y = originalPlayerY;
+                moved = false;
             } else {
-                console.log("Player moved to:", game.player.x, game.player.y);
+                console.log("Player moved to:", game.player.x, game.player.y); // true move
                 collectFruit();
             }
+        }
+
+        return moved;
+    }
+
+    document.addEventListener('keydown', function(event) {
+        if (event.key === 'r' || event.key === 'R') {
+            restartGame();
+        }
+
+        if (game.gameState !== 'playing') {
+            return;
+        }
+
+        // Movement
+        if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(event.key)) {
+            executeMove(event.key);
         }
 
         // use a complete order keystroke for now
         if (event.key === ' ') {
             tryCompleteOrders();
+        }
+
+        if (event.key === 'a' || event.key === 'A') {
+            // Watch AI play one game
+            watchAIPlay();
+        }
+        if (event.key === 't' || event.key === 'T') {
+            // Run quick test
+            testBasketSizes();
         }
 
         ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -648,6 +668,304 @@ xxx  xxx
         }
 
     }
+
+    // AI Player functions
+    const ai = {
+        // find all positions of a specific fruit type
+        findFruitPositions(fruitType) {
+            const positions = [];
+            for (let y = 0; y < game.grid.height; y++) {
+                for (let x = 0; x < game.grid.width; x++) {
+                    if (game.grid.fruits[y][x] === fruitType) {
+                        const distance = Math.abs(x - game.player.x) + Math.abs(y - game.player.y);
+                        positions.push({x, y, distance});
+                    }
+                }
+            }
+            positions.sort((a, b) => a.distance - b.distance);
+            return positions;
+        },
+
+        // get fruits needed for current orders
+        getFruitsNeeded() {
+            const needed = {};
+            const basketCounts = countBasketFruits();
+
+            // simplified approach shares the basket counts across orders; OK for AI auto play purposes
+            for (let order of game.orders) {
+                if (!order.completed) {
+                    for (let fruit in fruitTypes) {
+                        if (order[fruit]) {
+                            const have = basketCounts[fruit] || 0;
+                            const stillNeed = order[fruit] - have;
+                            if (stillNeed > 0) {
+                                needed[fruit] = stillNeed;
+                            }
+                        }
+                    }
+                }
+            }
+            return needed;
+        },
+
+        chooseNextTarget() {
+            const needed = this.getFruitsNeeded();
+
+            // closest needed fruit
+            let bestTarget = null;
+            let bestDistance = Infinity;
+
+            for (let fruit in needed) {
+                const positions = this.findFruitPositions(fruit);
+                if (positions.length > 0 && positions[0].distance < bestDistance) {
+                    bestDistance = positions[0].distance;
+                    bestTarget = { ...positions[0], fruitType: fruit };
+                }
+            }
+            return bestTarget;
+        },
+        
+        getDirectionTowardsTarget(target) {
+            if (!target) return null;
+            const dx = target.x - game.player.x;
+            const dy = target.y - game.player.y;
+            
+            // try horizontal first
+            if (Math.abs(dx) >= Math.abs(dy)) {
+                if (dx > 0) return 'ArrowRight';
+                if (dx < 0) return 'ArrowLeft';
+            }
+
+            // then vertical
+            if (dy > 0) return 'ArrowDown';
+            if (dy < 0) return 'ArrowUp';
+
+            return null;
+        },
+
+        getNextAction() {
+            const completableOrders = getCompleteableOrders();
+            if (completableOrders.length > 0) {
+                return { type: 'submit' };
+            }
+
+            const target = this.chooseNextTarget();
+            if (target) {
+                const direction = this.getDirectionTowardsTarget(target);
+                if (direction) {
+                    return { type: 'move', direction: direction };
+                }   
+            }
+
+            return { type: 'stuck' };
+        }
+    };
+
+    const simulator = {
+        config: {
+            basketSize: 10,
+            maxOrders: 3,
+            targetOrdersCount: 3,
+            maxTurns: 30,
+            visualize: false, // Set to true to watch AI play
+            visualizationDelay: 100 // ms between moves when visualizing
+        },
+
+        results: [],
+
+        applyConfig(config) {
+            game.basket.maxCapacity = config.basketSize;
+            game.maxActiveOrders = config.maxOrders;
+            game.targetOrdersCount = config.targetOrdersCount;
+        },
+
+        async runSingleGame(config = {}) {
+            const gameConfig = { ...this.config, ...config };
+            this.applyConfig(gameConfig);
+
+            restartGame();
+
+            let turns = 0;
+            let fruitsCollected = 0;
+            let moveAttempts = 0;
+            let failedMoves = 0;
+
+            while (game.gameState === 'playing' && turns < gameConfig.maxTurns) {
+                const action = ai.getNextAction();
+
+                if (action.type === 'submit') {
+                    tryCompleteOrders();
+                } else if (action.type === 'move') {
+                    moveAttempts++;
+                    const success = executeMove(action.direction);
+                    if (!success) {
+                        failedMoves++;
+                    }
+
+                    const currentBasketSize = game.basket.fruits.length;
+                    if (currentBasketSize > fruitsCollected - game.completedOrdersCount * 3) {
+                        fruitsCollected++;
+                    }
+                } else if (action.type === 'stuck') {
+                    game.gameState = 'lost';
+                    break;
+                }
+
+                turns++;
+                
+                // viz mode
+                if (gameConfig.visualize) {
+                    ctx.clearRect(0, 0, canvas.width, canvas.height);
+                    drawGrid();
+                    drawPlayer();
+                    drawOrders();
+                    drawBasket();
+                    if (game.gameState !== 'playing') {
+                        drawGameEndMessage();
+                    }
+                    
+                    // Wait before next move
+                    await new Promise(resolve => setTimeout(resolve, gameConfig.visualizationDelay));
+                }
+            }
+
+            return {
+                won: game.gameState === 'won',
+                turns: turns,
+                ordersCompleted: game.completedOrdersCount,
+                fruitsCollected: fruitsCollected,
+                moveAttempts: moveAttempts,
+                failedMoves: failedMoves,
+                timeout: turns >= gameConfig.maxTurns,
+                config: gameConfig
+            };
+        },
+
+        async runBatch(config = {}, numGames = 50) {
+            console.log(`Running batch of ${numGames} games`);
+            const results = [];
+            for (let i = 0; i < numGames; i++) {
+                const result = await this.runSingleGame(config);
+                results.push(result);
+
+                            // log progress
+                if ((i + 1) % 10 === 0) {
+                    console.log(`  Completed ${i + 1}/${numGames} games...`);
+                }
+            }
+
+
+
+            // Calculate statistics
+            const wins = results.filter(r => r.won).length;
+            const losses = results.filter(r => !r.won).length;
+            const timeouts = results.filter(r => r.timeout).length;
+            
+            const avgTurns = results.reduce((sum, r) => sum + r.turns, 0) / numGames;
+            const avgOrdersCompleted = results.reduce((sum, r) => sum + r.ordersCompleted, 0) / numGames;
+            const avgFruitsCollected = results.reduce((sum, r) => sum + r.fruitsCollected, 0) / numGames;
+            
+            const stats = {
+                numGames: numGames,
+                wins: wins,
+                losses: losses,
+                timeouts: timeouts,
+                winRate: wins / numGames,
+                avgTurns: avgTurns,
+                avgOrdersCompleted: avgOrdersCompleted,
+                avgFruitsCollected: avgFruitsCollected,
+                config: config,
+                rawResults: results
+            };
+            
+            this.results.push(stats);
+            return stats;
+        },
+
+        // Compare multiple configurations
+        async compareConfigs(configs, gamesPerConfig = 100) {
+            console.log(`Comparing ${configs.length} configurations...`);
+            const comparisons = [];
+            
+            for (let i = 0; i < configs.length; i++) {
+                const config = configs[i];
+                console.log(`\nTesting config ${i + 1}/${configs.length}: ${config.name || 'Unnamed'}`);
+                
+                const stats = await this.runBatch(config, gamesPerConfig);
+                
+                console.log(`  Win Rate: ${(stats.winRate * 100).toFixed(1)}%`);
+                console.log(`  Avg Turns: ${stats.avgTurns.toFixed(1)}`);
+                console.log(`  Avg Orders Completed: ${stats.avgOrdersCompleted.toFixed(2)}`);
+                
+                comparisons.push({
+                    name: config.name || `Config ${i + 1}`,
+                    stats: stats
+                });
+            }
+            
+            return comparisons;
+        },
+        
+        // Print comparison table
+        printComparison(comparisons) {
+            console.log('\n=== CONFIGURATION COMPARISON ===');
+            console.log('Config Name'.padEnd(20) + 
+                        'Win Rate'.padEnd(12) + 
+                        'Avg Turns'.padEnd(12) + 
+                        'Avg Orders'.padEnd(12));
+            console.log('-'.repeat(56));
+            
+            for (let comp of comparisons) {
+                console.log(
+                    comp.name.padEnd(20) +
+                    `${(comp.stats.winRate * 100).toFixed(1)}%`.padEnd(12) +
+                    comp.stats.avgTurns.toFixed(1).padEnd(12) +
+                    comp.stats.avgOrdersCompleted.toFixed(2).padEnd(12)
+                );
+            }
+        }
+
+    };
+
+    // Example 1: Watch AI play one game
+    async function watchAIPlay() {
+        const result = await simulator.runSingleGame({
+            visualize: true,
+            visualizationDelay: 200  // 200ms between moves
+        });
+        console.log('Game result:', result);
+    }
+
+    // Example 2: Test current configuration
+    async function testCurrentConfig() {
+        const stats = await simulator.runBatch({
+            basketSize: 10,
+            maxActiveOrders: 3,
+            targetOrdersCount: 3
+        }, 100);
+        
+        console.log('Win rate:', (stats.winRate * 100).toFixed(1) + '%');
+        console.log('Average turns to complete:', stats.avgTurns.toFixed(1));
+    }
+
+    // Example 3: Compare different basket sizes
+    async function testBasketSizes() {
+        const configs = [
+            { name: 'Basket: 8', basketSize: 8 },
+            { name: 'Basket: 10', basketSize: 10 },
+            { name: 'Basket: 12', basketSize: 12 },
+            { name: 'Basket: 15', basketSize: 15 }
+        ];
+        
+        const results = await simulator.compareConfigs(configs, 50);
+        simulator.printComparison(results);
+    }
+
+
+
+
+
+
 
 
 
