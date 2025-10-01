@@ -66,17 +66,41 @@
         orange: { name: 'orange', color: 'orange' , emoji: '🍊' },
     };
 
+    const mapShapeTemplate = `
+xxx  xxx
+xxx  xxx
+xxxSxxxx
+xxxxxxxx
+xxx  xxx
+xxx  xxx
+`.trim();
+
     // Function to randomly generate fruits for the grid
     function generateFruitGrid() {
         const fruits = Object.keys(fruitTypes); 
+        const lines = mapShapeTemplate.split('\n');
         game.grid.fruits = [];
         
         for (let y = 0; y < game.grid.height; y++) {
             game.grid.fruits[y] = []; // Create a row
+            const line = lines[y] || '';
             for (let x = 0; x < game.grid.width; x++) {
-                // Pick a random fruit type
-                const randomFruit = fruits[Math.floor(Math.random() * fruits.length)];
-                game.grid.fruits[y][x] = randomFruit;
+                const char = line[x];
+
+                if (char === 'x') {
+                    // playable cell - randomly choose a fruit type
+                    const randomFruit = fruits[Math.floor(Math.random() * fruits.length)];
+                    game.grid.fruits[y][x] = randomFruit;
+
+                } else if (char === 'S') {
+                    // start position
+                    game.grid.fruits[y][x] = null; // no fruit at start position
+                    game.player.x = x;
+                    game.player.y = y;
+                } else {
+                    // space. unplayable cell / wall
+                    game.grid.fruits[y][x] = 'wall';
+                }
             }
         }
     }    
@@ -93,7 +117,11 @@
                 const pixelX = x * cellSize;
                 const pixelY = y * cellSize;
 
-                if (fruitType === null) {
+                if (fruitType === 'wall') {
+                    // Draw wall
+                    ctx.fillStyle = '#999';
+                    ctx.fillRect(pixelX, pixelY, cellSize, cellSize);
+                } else if (fruitType === null) {
                     // Draw empty cell
                     ctx.fillStyle = '#f0f0f0';
                     ctx.fillRect(pixelX, pixelY, cellSize, cellSize);
@@ -131,8 +159,8 @@
         // restore previous settings (e.g. text alignment) after drawing the grid
        ctx.restore();
     }
-    
 
+    
 
     // Function to draw the player
     function drawPlayer() {
@@ -355,7 +383,11 @@
             console.log("Player trying to move to:", game.player.x, game.player.y);
 
             const fruitAtNewPosition = game.grid.fruits[game.player.y][game.player.x];
-            if (fruitAtNewPosition !== null && game.basket.fruits.length >= game.basket.maxCapacity) {
+            if (fruitAtNewPosition === 'wall') {
+                console.log("Not allowed to move to a wall position.");
+                game.player.x = originalPlayerX;
+                game.player.y = originalPlayerY;
+            } else if (fruitAtNewPosition !== null && game.basket.fruits.length >= game.basket.maxCapacity) {
                 console.log("Not allowed to move to a fruit position when basket is full.");
                 game.player.x = originalPlayerX;
                 game.player.y = originalPlayerY;
@@ -386,8 +418,6 @@
         game.completedOrdersCount = 0;
         game.orders = [];
         game.basket.fruits = [];
-        game.player.x = 0;
-        game.player.y = 0;
 
         generateFruitGrid();
         for (let i = 0; i < game.maxActiveOrders; i++) {
@@ -619,7 +649,6 @@
         addNewOrder();
     }
     console.log("Game state now:", game);
-
 
 
     drawGrid();
